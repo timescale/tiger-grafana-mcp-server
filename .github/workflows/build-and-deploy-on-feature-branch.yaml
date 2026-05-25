@@ -1,7 +1,7 @@
-name: Build and Deploy - Merge main
+name: Build and Deploy - Feature Branch Push
 on:
   push:
-    branches:
+    branches-ignore:
       - main
 
 jobs:
@@ -22,19 +22,11 @@ jobs:
               "sha": "${{ github.sha }}",
               "latest": true
             }
-
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    strategy:
-      matrix:
-        include:
-          - env: dev
-            namespace: savannah-system
-            notify_slack: false
-          # prod (tiger-mcp) disabled until prod secrets and config are ready
     steps:
-      - name: Dispatch Workflow - ${{ matrix.env }}
+      - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main
         with:
           github-token: ${{ secrets.ORG_AUTOMATION_TOKEN }}
@@ -45,8 +37,8 @@ jobs:
           inputs: >
             {
               "repository": "tiger-grafana-mcp-server",
-              "sha": "${{ github.sha }}",
-              "env": "${{ matrix.env }}",
-              "namespace": "${{ matrix.namespace }}",
-              "notify_slack": ${{ matrix.notify_slack }}
+              "sha": "latest",
+              "env": "dev",
+              "namespace": "savannah-system",
+              "notify_slack": false
             }
