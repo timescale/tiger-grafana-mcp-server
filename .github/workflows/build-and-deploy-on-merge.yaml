@@ -8,31 +8,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check token presence
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "ORG_GITHUB_AGENTS_TOKEN is empty"
-          else
-            echo "ORG_GITHUB_AGENTS_TOKEN is present"
-          fi
-        env:
-          TOKEN: ${{ secrets.ORG_GITHUB_AGENTS_TOKEN }}
-
-      - name: Check token identity
-        run: |
-          response="$(curl -sS -w '\n%{http_code}' -H "Authorization: token $TOKEN" https://api.github.com/user)"
-          status="$(printf '%s' "$response" | tail -n1)"
-          body="$(printf '%s' "$response" | sed '$d')"
-
-          echo "GitHub API status: $status"
-          if [ "$status" = "200" ]; then
-            BODY="$body" node -e 'const body = JSON.parse(process.env.BODY); console.log(`Token identity: ${body.login} (${body.type})`);'
-          else
-            echo "$body"
-          fi
-        env:
-          TOKEN: ${{ secrets.ORG_GITHUB_AGENTS_TOKEN }}
-
       - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main
         with:
@@ -46,22 +21,4 @@ jobs:
               "repository": "tiger-grafana-mcp-server",
               "sha": "${{ github.sha }}",
               "latest": true
-            }
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Dispatch Workflow
-        uses: timescale/workflow-dispatch-action@main
-        with:
-          github-token: ${{ secrets.ORG_GITHUB_AGENTS_TOKEN }}
-          owner: timescale
-          repo: tiger-agents-deploy
-          workflow_id: deploy.yaml
-          ref: 'main'
-          inputs: >
-            {
-              "repository": "tiger-grafana-mcp-server",
-              "sha": "${{ github.sha }}"
             }
