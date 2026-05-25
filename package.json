@@ -1,0 +1,40 @@
+{
+  "name": "@tigerdata/tiger-grafana-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for querying Grafana Postgres datasources",
+  "license": "Apache-2.0",
+  "author": "TigerData",
+  "type": "module",
+  "bin": {
+    "tiger-grafana-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepublishOnly": "npm run build",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "lint": "biome check .",
+    "inspector": "npx @modelcontextprotocol/inspector"
+  },
+  "dependencies": {
+    "@tigerdata/mcp-boilerplate": "^1.3.5",
+    "dotenv": "^17.2.3",
+    "migrate": "^2.1.0",
+    "pg": "^8.21.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.8",
+    "@types/node": "^22.19.15",
+    "shx": "^0.4.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
