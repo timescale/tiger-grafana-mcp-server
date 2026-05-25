@@ -1,7 +1,7 @@
-name: Build and Deploy - Merge main
+name: Build and Deploy - Feature Branch Push
 on:
   push:
-    branches:
+    branches-ignore:
       - main
 
 jobs:
@@ -16,25 +16,12 @@ jobs:
           repo: tiger-agents-deploy
           workflow_id: build.yaml
           ref: 'AGE-449-grafana-mcp'
-          inputs: >
-            {
-              "repository": "tiger-grafana-mcp-server",
-              "sha": "${{ github.sha }}",
-              "latest": true
-            }
-
+          inputs: '{"repository": "tiger-grafana-mcp-server", "sha": "${{ github.sha }}"}'
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    strategy:
-      matrix:
-        include:
-          - env: dev
-            namespace: savannah-system
-          - env: prod
-            namespace: tiger-mcp
     steps:
-      - name: Dispatch Workflow - ${{ matrix.env }}
+      - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main
         with:
           github-token: ${{ secrets.ORG_AUTOMATION_TOKEN }}
@@ -46,6 +33,6 @@ jobs:
             {
               "repository": "tiger-grafana-mcp-server",
               "sha": "${{ github.sha }}",
-              "env": "${{ matrix.env }}",
-              "namespace": "${{ matrix.namespace }}"
+              "env": "dev",
+              "namespace": "savannah-system"
             }
