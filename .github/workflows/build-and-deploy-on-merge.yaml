@@ -8,43 +8,35 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch Build Workflow
+      - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main
         with:
           github-token: ${{ secrets.ORG_GITHUB_AGENTS_TOKEN }}
           owner: timescale
           repo: tiger-agents-deploy
           workflow_id: build.yaml
-          ref: main
+          ref: 'main'
           inputs: >
             {
               "repository": "tiger-grafana-mcp-server",
               "sha": "${{ github.sha }}",
-              "uid": "${{ github.run_id }}",
-              "latest": true,
-              "auto_sha_tag": false,
-              "extra_tags": "prod"
+              "latest": true
             }
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Dispatch Deploy Workflow
+      - name: Dispatch Workflow
         uses: timescale/workflow-dispatch-action@main
         with:
           github-token: ${{ secrets.ORG_GITHUB_AGENTS_TOKEN }}
           owner: timescale
           repo: tiger-agents-deploy
           workflow_id: deploy.yaml
-          ref: main
+          ref: 'main'
           inputs: >
             {
               "repository": "tiger-grafana-mcp-server",
-              "sha": "${{ github.sha }}",
-              "uid": "${{ github.run_id }}",
-              "tag": "prod",
-              "env": "prod",
-              "namespace": "savannah-system",
-              "region": "us-east-1"
+              "sha": "${{ github.sha }}"
             }
