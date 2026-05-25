@@ -31,8 +31,10 @@ jobs:
         include:
           - env: dev
             namespace: savannah-system
+            notify_slack: false
           - env: prod
             namespace: tiger-mcp
+            notify_slack: true
     steps:
       - name: Dispatch Workflow - ${{ matrix.env }}
         uses: timescale/workflow-dispatch-action@main
@@ -47,5 +49,6 @@ jobs:
               "repository": "tiger-grafana-mcp-server",
               "sha": "${{ github.sha }}",
               "env": "${{ matrix.env }}",
-              "namespace": "${{ matrix.namespace }}"
+              "namespace": "${{ matrix.namespace }}",
+              "notify_slack": ${{ matrix.notify_slack }}
             }

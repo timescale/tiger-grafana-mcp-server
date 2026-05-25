@@ -16,7 +16,12 @@ jobs:
           repo: tiger-agents-deploy
           workflow_id: build.yaml
           ref: 'AGE-449-grafana-mcp'
-          inputs: '{"repository": "tiger-grafana-mcp-server", "sha": "${{ github.sha }}"}'
+          inputs: >
+            {
+              "repository": "tiger-grafana-mcp-server",
+              "sha": "${{ github.sha }}",
+              "latest": true
+            }
   deploy:
     runs-on: ubuntu-latest
     needs: build
@@ -32,7 +37,8 @@ jobs:
           inputs: >
             {
               "repository": "tiger-grafana-mcp-server",
-              "sha": "${{ github.sha }}",
+              "sha": "latest",
               "env": "dev",
-              "namespace": "savannah-system"
+              "namespace": "savannah-system",
+              "notify_slack": false
             }
