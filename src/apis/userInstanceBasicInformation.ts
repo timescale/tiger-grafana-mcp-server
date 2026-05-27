@@ -11,6 +11,9 @@ import {
 const DEFAULT_POSTGRES_DATASOURCE_UID = 'PDD8BC545CD76D0F3';
 const DEFAULT_PROMETHEUS_DATASOURCE_UID = 'P7BFACEA27D7DF090';
 
+// Dashboard targeted by the user-facing deep link.
+const USER_INSTANCE_DASHBOARD_PATH = 'd/3lvO6U-Zz/user-instance-single';
+
 const inputSchema = {
   projectId: z.string().describe('The project ID.'),
   serviceId: z.string().describe('The service ID.'),
@@ -40,6 +43,11 @@ const outputSchema = {
     .nullable()
     .describe(
       'TimescaleDB extension version from deployer.instance_extensions.',
+    ),
+  dashboardUrl: z
+    .string()
+    .describe(
+      'Grafana deep link to the user-instance-single dashboard for this project/service.',
     ),
 } as const;
 
@@ -137,9 +145,15 @@ export const userInstanceBasicInformation: ApiFactory<
     const formattedTsDbVersion =
       tsDbVersion == null ? null : String(tsDbVersion);
 
+    const dashboardUrl =
+      `${ctx.grafana.publicUrl}/${USER_INSTANCE_DASHBOARD_PATH}` +
+      `?var-project=${encodeURIComponent(projectId)}` +
+      `&var-service=${encodeURIComponent(serviceId)}`;
+
     return {
       postgresqlVersion: formattedPostgresqlVersion,
       timescaledbVersion: formattedTsDbVersion,
+      dashboardUrl,
     };
   },
 });

@@ -10,6 +10,7 @@ import {
 
 const config: GrafanaConfig = {
   url: 'https://grafana.example.com',
+  publicUrl: 'https://grafana.example.com',
   serviceAccountToken: 'token',
 };
 
