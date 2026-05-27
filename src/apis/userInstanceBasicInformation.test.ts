@@ -6,6 +6,7 @@ import { userInstanceBasicInformation } from './userInstanceBasicInformation.js'
 const context: ServerContext = {
   grafana: {
     url: 'https://grafana.example.com',
+    publicUrl: 'https://grafana.example.com',
     serviceAccountToken: 'token',
   },
 };
@@ -75,6 +76,8 @@ describe('userInstanceBasicInformation', () => {
     assert.deepEqual(result, {
       postgresqlVersion: '18.3',
       timescaledbVersion: '2.27.0',
+      dashboardUrl:
+        'https://grafana.example.com/d/3lvO6U-Zz/user-instance-single?var-project=a90edkib9o&var-service=forkh6059q',
     });
     assert.equal(fetchMock.mock.callCount(), 2);
 
