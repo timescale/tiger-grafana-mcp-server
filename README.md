@@ -1,6 +1,6 @@
 # Tiger Grafana MCP Server
 
-MCP server that queries Timescale dev Grafana datasources (Postgres and Prometheus) to return basic information about a user instance (PostgreSQL and TimescaleDB versions).
+MCP server that queries Timescale Grafana datasources (Postgres and Prometheus) to return information about user instances.
 
 Built on [`@tigerdata/mcp-boilerplate`](https://www.npmjs.com/package/@tigerdata/mcp-boilerplate) and the [Model Context Protocol](https://modelcontextprotocol.io/introduction).
 
@@ -8,7 +8,7 @@ Built on [`@tigerdata/mcp-boilerplate`](https://www.npmjs.com/package/@tigerdata
 
 | Tool | Description |
 |------|-------------|
-| `userInstanceBasicInformation` | Looks up PostgreSQL and TimescaleDB versions for a given `projectId` and `serviceId` via Grafana datasource queries |
+| `user_instance_basic_information` | Returns PostgreSQL and TimescaleDB versions for a given `projectId` and `serviceId`, plus a deep link (`dashboardUrl`) to the **user-instance-single** Grafana dashboard. |
 
 ## Requirements
 
@@ -18,10 +18,11 @@ Built on [`@tigerdata/mcp-boilerplate`](https://www.npmjs.com/package/@tigerdata
 
 ## Configuration
 
-| Variable | Description |
-|----------|-------------|
-| `GRAFANA_URL` | Grafana base URL (no trailing slash). In-cluster dev: `http://monitoring-v2-grafana.savannah-system.svc.cluster.local` |
-| `GRAFANA_SERVICE_ACCOUNT_TOKEN` | Grafana service account token (Bearer auth) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GRAFANA_URL` | yes | Grafana API base URL (no trailing slash). In-cluster: `http://monitoring-v2-grafana.savannah-system.svc.cluster.local` |
+| `GRAFANA_SERVICE_ACCOUNT_TOKEN` | yes | Grafana service account token (Bearer auth) |
+| `PROD_DEPLOY` | no | When `true`, deep links target the prod Grafana host. Anything else (or unset) targets dev. Used only for user-facing URLs, not for API queries. |
 
 Create a `.env` file in the project root:
 
@@ -48,7 +49,22 @@ npm install
 npm run build
 ```
 
-### Run locally
+### One-command local dev (recommended)
+
+The repo ships a script that installs deps, builds, opens a `kubectl` tunnel to the in-cluster dev Grafana, starts the MCP server on HTTP, and launches the MCP Inspector pointed at it.
+
+```bash
+./scripts/dev-inspector.sh
+```
+
+Prerequisites:
+- `.env` exists with `GRAFANA_SERVICE_ACCOUNT_TOKEN` set
+- `kubectl` configured against the dev cluster (e.g. `kubectx ts-dev@us-east-1`)
+- Node.js 22+
+
+The script overrides `GRAFANA_URL` to the local tunnel (`http://localhost:3000`) for the duration of the run, and tears the tunnel + MCP server down on exit.
+
+### Run manually
 
 **HTTP** (default for Docker):
 
@@ -67,13 +83,14 @@ node dist/index.js stdio
 
 | Command | Description |
 |---------|-------------|
+| `./scripts/dev-inspector.sh` | One-command local dev: tunnel + MCP server + Inspector |
 | `npm run build` | Compile TypeScript |
 | `npm run typecheck` | Type check only |
 | `npm run test` | Run tests |
 | `npm run lint` | Biome lint |
 | `npm run inspector` | Open MCP Inspector |
 
-### MCP Inspector
+### MCP Inspector (manual)
 
 ```bash
 npm run build
@@ -111,10 +128,12 @@ Images are built and deployed via GitHub Actions, which dispatch workflows in [t
 
 | Event | Behavior |
 |-------|----------|
-| Push to a feature branch | Build image, deploy to **dev** (`savannah-system`) |
-| Push to `main` | Build image (`latest`), deploy to **dev** and **prod** |
+| Push to a feature branch | Build image (`latest` + `auto-<sha>`), deploy to **dev** (`savannah-system`). No Slack notification. |
+| Push to `main` | Build image (`latest` + `auto-<sha>`), deploy to **dev**. Prod deploy is wired in the workflow but currently disabled until prod secrets/config are ready. |
 
 Helm chart: `tiger-agents-deploy/charts/tiger-grafana-mcp-server`
+
+When prod deploys are enabled, set `PROD_DEPLOY=true` in the prod chart values so the deep links resolve to `https://grafana.prod-us-east-1.ops.forge.timescale.com` instead of the dev host.
 
 **Dev Tailscale URL** (when Tailscale is enabled in dev values):
 
