@@ -69,16 +69,13 @@ export const userInstanceBasicInformation: ApiFactory<
       queryGrafanaPrometheusQueries(ctx.grafana, {
         datasourceUid: PROMETHEUS_THANOS_UID,
         queries: [
-          // last_over_time(...[24h]) recovers the latest value even when a
-          // service hasn't been scraped recently (paused / quiet instances
-          // fall outside the 5m staleness window of an instant query).
           {
             refId: 'major',
-            expr: `last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[24h]) / 10000`,
+            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[30d])) / 10000`,
           },
           {
             refId: 'minor',
-            expr: `last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[24h]) % 10000`,
+            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[30d])) % 10000`,
           },
         ],
       }),
