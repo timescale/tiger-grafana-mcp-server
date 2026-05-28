@@ -1,12 +1,16 @@
 import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { z } from 'zod';
-import { DATA_SOURCES } from '../data_sources.js';
 import type { ServerContext } from '../types.js';
 import {
   getValues,
   queryGrafanaPostgresQueries,
   queryGrafanaPrometheusQueries,
 } from '../util/grafana.js';
+
+// Grafana datasource UIDs. Same UIDs on dev and prod (Grafanas provisioned
+// with deterministic UIDs).
+const PROMETHEUS_THANOS_UID = 'P7C88DFFA3330979B'; // "All Prometheus regions (Thanos)"
+const POSTGRES_UID = 'PDD8BC545CD76D0F3'; // "PostgreSQL (Grafana)" — exposes deployer schema
 
 // Dashboard targeted by the user-facing deep link.
 const USER_INSTANCE_DASHBOARD_PATH = 'd/3lvO6U-Zz/user-instance-single';
@@ -63,7 +67,7 @@ export const userInstanceBasicInformation: ApiFactory<
 
     const [postgresVersionResult, timescaledbResult] = await Promise.all([
       queryGrafanaPrometheusQueries(ctx.grafana, {
-        datasourceUid: DATA_SOURCES.prometheusThanosUid,
+        datasourceUid: PROMETHEUS_THANOS_UID,
         queries: [
           // last_over_time(...[24h]) recovers the latest value even when a
           // service hasn't been scraped recently (paused / quiet instances
@@ -79,7 +83,7 @@ export const userInstanceBasicInformation: ApiFactory<
         ],
       }),
       queryGrafanaPostgresQueries(ctx.grafana, {
-        datasourceUid: DATA_SOURCES.postgresUid,
+        datasourceUid: POSTGRES_UID,
         queries: [
           {
             refId: 'timescaledb',
