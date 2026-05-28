@@ -1,15 +1,12 @@
 import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { z } from 'zod';
+import { DATA_SOURCES } from '../data_sources.js';
 import type { ServerContext } from '../types.js';
 import {
   getValues,
   queryGrafanaPostgresQueries,
   queryGrafanaPrometheusQueries,
 } from '../util/grafana.js';
-
-// Default Grafana datasources used by the dev Grafana instance.
-const DEFAULT_POSTGRES_DATASOURCE_UID = 'PDD8BC545CD76D0F3';
-const DEFAULT_PROMETHEUS_DATASOURCE_UID = 'P7BFACEA27D7DF090';
 
 // Dashboard targeted by the user-facing deep link.
 const USER_INSTANCE_DASHBOARD_PATH = 'd/3lvO6U-Zz/user-instance-single';
@@ -22,14 +19,14 @@ const inputSchema = {
     .nullable()
     .default(null)
     .describe(
-      `Postgres datasource UID. Pass null to use ${DEFAULT_POSTGRES_DATASOURCE_UID}.`,
+      'Postgres datasource UID. Pass null to use the server default for the active deploy environment.',
     ),
   prometheusDatasourceUid: z
     .string()
     .nullable()
     .default(null)
     .describe(
-      `Prometheus datasource UID. Pass null to use ${DEFAULT_PROMETHEUS_DATASOURCE_UID}.`,
+      'Prometheus datasource UID. Pass null to use the server default for the active deploy environment.',
     ),
 } as const;
 
@@ -67,8 +64,8 @@ const normalizeInput = ({
   sqlProjectId: string;
   sqlServiceId: string;
 } => ({
-  postgresUid: postgresDatasourceUid || DEFAULT_POSTGRES_DATASOURCE_UID,
-  prometheusUid: prometheusDatasourceUid || DEFAULT_PROMETHEUS_DATASOURCE_UID,
+  postgresUid: postgresDatasourceUid || DATA_SOURCES.postgresUid,
+  prometheusUid: prometheusDatasourceUid || DATA_SOURCES.prometheusThanosUid,
   sqlProjectId: sqlString(projectId),
   sqlServiceId: sqlString(serviceId),
 });
