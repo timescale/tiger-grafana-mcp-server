@@ -115,11 +115,12 @@ ensure_dependencies() {
 }
 
 # Build the TypeScript sources if dist/index.js is missing or older than
-# the build inputs.
+# any of the build inputs (package.json, tsconfig.json, or any file under src/).
 ensure_build() {
   if [[ -f dist/index.js ]] \
     && [[ dist/index.js -nt package.json ]] \
-    && [[ dist/index.js -nt tsconfig.json ]]; then
+    && [[ dist/index.js -nt tsconfig.json ]] \
+    && [[ -z "$(find src -type f -newer dist/index.js -print -quit 2>/dev/null)" ]]; then
     return
   fi
   echo "Building..."
