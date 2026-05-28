@@ -14,20 +14,6 @@ const USER_INSTANCE_DASHBOARD_PATH = 'd/3lvO6U-Zz/user-instance-single';
 const inputSchema = {
   projectId: z.string().describe('The project ID.'),
   serviceId: z.string().describe('The service ID.'),
-  postgresDatasourceUid: z
-    .string()
-    .nullable()
-    .default(null)
-    .describe(
-      'Postgres datasource UID. Pass null to use the server default for the active deploy environment.',
-    ),
-  prometheusDatasourceUid: z
-    .string()
-    .nullable()
-    .default(null)
-    .describe(
-      'Prometheus datasource UID. Pass null to use the server default for the active deploy environment.',
-    ),
 } as const;
 
 const outputSchema = {
@@ -49,26 +35,8 @@ const outputSchema = {
 } as const;
 
 type OutputSchema = InferSchema<typeof outputSchema>;
-type InputSchema = InferSchema<typeof inputSchema>;
 
 const sqlString = (value: string): string => value.replaceAll("'", "''");
-
-const normalizeInput = ({
-  projectId,
-  serviceId,
-  postgresDatasourceUid,
-  prometheusDatasourceUid,
-}: InputSchema): {
-  postgresUid: string;
-  prometheusUid: string;
-  sqlProjectId: string;
-  sqlServiceId: string;
-} => ({
-  postgresUid: postgresDatasourceUid || DATA_SOURCES.postgresUid,
-  prometheusUid: prometheusDatasourceUid || DATA_SOURCES.prometheusThanosUid,
-  sqlProjectId: sqlString(projectId),
-  sqlServiceId: sqlString(serviceId),
-});
 
 export const userInstanceBasicInformation: ApiFactory<
   ServerContext,
@@ -89,36 +57,29 @@ export const userInstanceBasicInformation: ApiFactory<
       idempotentHint: true,
     },
   },
-  fn: async ({
-    projectId,
-    serviceId,
-    postgresDatasourceUid,
-    prometheusDatasourceUid,
-  }): Promise<OutputSchema> => {
-    const { postgresUid, prometheusUid, sqlProjectId, sqlServiceId } =
-      normalizeInput({
-        projectId,
-        serviceId,
-        postgresDatasourceUid,
-        prometheusDatasourceUid,
-      });
+  fn: async ({ projectId, serviceId }): Promise<OutputSchema> => {
+    const sqlProjectId = sqlString(projectId);
+    const sqlServiceId = sqlString(serviceId);
 
     const [postgresVersionResult, timescaledbResult] = await Promise.all([
       queryGrafanaPrometheusQueries(ctx.grafana, {
-        datasourceUid: prometheusUid,
+        datasourceUid: DATA_SOURCES.prometheusThanosUid,
         queries: [
+          // last_over_time(...[24h]) recovers the latest value even when a
+          // service hasn't been scraped recently (paused / quiet instances
+          // fall outside the 5m staleness window of an instant query).
           {
             refId: 'major',
-            expr: `pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"} / 10000`,
+            expr: `last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[24h]) / 10000`,
           },
           {
             refId: 'minor',
-            expr: `pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"} % 10000`,
+            expr: `last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[24h]) % 10000`,
           },
         ],
       }),
       queryGrafanaPostgresQueries(ctx.grafana, {
-        datasourceUid: postgresUid,
+        datasourceUid: DATA_SOURCES.postgresUid,
         queries: [
           {
             refId: 'timescaledb',

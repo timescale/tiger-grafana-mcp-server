@@ -69,8 +69,6 @@ describe('userInstanceBasicInformation', () => {
     const result = await tool.fn({
       projectId: 'a90edkib9o',
       serviceId: 'forkh6059q',
-      postgresDatasourceUid: null,
-      prometheusDatasourceUid: null,
     });
 
     assert.deepEqual(result, {
@@ -112,8 +110,6 @@ describe('userInstanceBasicInformation', () => {
     await tool.fn({
       projectId: "project'id",
       serviceId: "service'id",
-      postgresDatasourceUid: null,
-      prometheusDatasourceUid: null,
     });
 
     const call = fetchMock.mock.calls[1];
