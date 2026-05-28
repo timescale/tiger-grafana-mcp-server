@@ -41,6 +41,7 @@ MCP_URL="http://localhost:${PORT}/mcp"
 # Grafana tunnel config. This script always tunnels to the in-cluster Grafana
 # and overrides GRAFANA_URL to point at the local tunnel — these defaults
 # target the dev cluster but can be overridden via environment variables.
+KUBECONTEXT="${KUBECONTEXT:-ts-dev@us-east-1}"
 GRAFANA_NAMESPACE="${GRAFANA_NAMESPACE:-savannah-system}"
 GRAFANA_SERVICE="${GRAFANA_SERVICE:-svc/monitoring-v2-grafana}"
 GRAFANA_LOCAL_PORT="${GRAFANA_LOCAL_PORT:-3000}"
@@ -185,7 +186,7 @@ start_grafana_tunnel() {
   fi
   echo "Starting kubectl port-forward ${GRAFANA_SERVICE} -n ${GRAFANA_NAMESPACE} (${GRAFANA_LOCAL_PORT}:${GRAFANA_REMOTE_PORT})..."
   kubectl -n "${GRAFANA_NAMESPACE}" port-forward "${GRAFANA_SERVICE}" \
-    "${GRAFANA_LOCAL_PORT}:${GRAFANA_REMOTE_PORT}" >/dev/null 2>&1 &
+    "${GRAFANA_LOCAL_PORT}:${GRAFANA_REMOTE_PORT}" > >(sed 's/^/[kubectl] /') 2>&1 &
   PF_PID=$!
   for _ in $(seq 1 60); do
     if nc -z localhost "${GRAFANA_LOCAL_PORT}" 2>/dev/null; then
@@ -206,6 +207,11 @@ start_grafana_tunnel() {
 
 # Open the Grafana tunnel and force the MCP to use it, regardless of what
 # .env says — this script is for local dev only.
+if command -v kubectl >/dev/null 2>&1; then
+  echo "Switching kubecontext to ${KUBECONTEXT}..."
+  kubectl config use-context "${KUBECONTEXT}"
+  echo "Current kubecontext: $(kubectl config current-context 2>/dev/null || echo '<none>') -> $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || echo '<unknown>')"
+fi
 start_grafana_tunnel
 export GRAFANA_URL="http://localhost:${GRAFANA_LOCAL_PORT}"
 echo "Overriding GRAFANA_URL=${GRAFANA_URL} for this run."
