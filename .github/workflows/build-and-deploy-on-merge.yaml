@@ -20,7 +20,8 @@ jobs:
             {
               "repository": "tiger-grafana-mcp-server",
               "sha": "${{ github.sha }}",
-              "latest": true
+              "latest": true,
+              "env_prefix": "prod"
             }
 
   deploy:
@@ -29,10 +30,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - env: dev
+          - env: prod
             namespace: savannah-system
-            notify_slack: false
-          # prod (tiger-mcp) disabled until prod secrets and config are ready
+            notify_slack: true
     steps:
       - name: Dispatch Workflow - ${{ matrix.env }}
         uses: timescale/workflow-dispatch-action@main
@@ -48,5 +48,6 @@ jobs:
               "sha": "${{ github.sha }}",
               "env": "${{ matrix.env }}",
               "namespace": "${{ matrix.namespace }}",
+              "env_prefix": "prod",
               "notify_slack": ${{ matrix.notify_slack }}
             }

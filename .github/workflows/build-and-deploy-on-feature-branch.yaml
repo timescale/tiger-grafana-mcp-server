@@ -20,7 +20,8 @@ jobs:
             {
               "repository": "tiger-grafana-mcp-server",
               "sha": "${{ github.sha }}",
-              "latest": true
+              "latest": true,
+              "env_prefix": "dev"
             }
   deploy:
     runs-on: ubuntu-latest
@@ -37,8 +38,9 @@ jobs:
           inputs: >
             {
               "repository": "tiger-grafana-mcp-server",
-              "sha": "latest",
+              "sha": "${{ github.sha }}",
               "env": "dev",
               "namespace": "savannah-system",
+              "env_prefix": "dev",
               "notify_slack": false
             }
