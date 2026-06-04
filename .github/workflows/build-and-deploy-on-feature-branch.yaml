@@ -15,7 +15,7 @@ jobs:
           owner: timescale
           repo: tiger-agents-deploy
           workflow_id: build.yaml
-          ref: 'AGE-449-grafana-mcp'
+          ref: 'main'
           inputs: >
             {
               "repository": "tiger-grafana-mcp-server",
@@ -34,7 +34,7 @@ jobs:
           owner: timescale
           repo: tiger-agents-deploy
           workflow_id: deploy.yaml
-          ref: 'AGE-449-grafana-mcp'
+          ref: 'main'
           inputs: >
             {
               "repository": "tiger-grafana-mcp-server",
