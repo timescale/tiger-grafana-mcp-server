@@ -32,7 +32,9 @@ jobs:
           - env: dev
             namespace: savannah-system
             notify_slack: false
-          # prod (tiger-mcp) disabled until prod secrets and config are ready
+          - env: prod
+            namespace: tiger-mcp
+            notify_slack: true
     steps:
       - name: Dispatch Workflow - ${{ matrix.env }}
         uses: timescale/workflow-dispatch-action@main
