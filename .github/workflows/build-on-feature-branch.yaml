@@ -1,0 +1,25 @@
+name: Build Docker - Feature Branch Push
+on:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Workflow
+        uses: timescale/workflow-dispatch-action@main
+        with:
+          github-token: ${{ secrets.ORG_AUTOMATION_TOKEN }}
+          owner: timescale
+          repo: tiger-agents-deploy
+          workflow_id: build.yaml
+          ref: 'main'
+          # Tagged with the commit SHA only. Feature branches must not move the
+          # `latest` tag, which merges to main publish and deploys consume.
+          inputs: >
+            {
+              "repository": "tiger-grafana-mcp-server",
+              "sha": "${{ github.sha }}"
+            }

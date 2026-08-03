@@ -234,6 +234,42 @@ describe('grafanaDashboardLink', () => {
     );
   });
 
+  it('warns about the missing token scope when it cannot list datasources', async () => {
+    mock.method(globalThis, 'fetch', async (url: unknown, init: unknown) => {
+      if (String(url).endsWith('/api/datasources')) {
+        return new Response(JSON.stringify({ message: 'Permission denied' }), {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const payload = JSON.parse(String((init as RequestInit).body));
+      const refIds: string[] = payload.queries.map(
+        (query: { refId: string }) => query.refId,
+      );
+      return jsonResponse({
+        results: Object.fromEntries(
+          Object.entries(SERVICE_METRICS).filter(([refId]) =>
+            refIds.includes(refId),
+          ),
+        ),
+      });
+    });
+
+    const tool = await grafanaDashboardLink(context, {});
+    const result = await tool.fn({
+      projectId: 'kbq0mbo1jb',
+      serviceId: 'jzfulctix1',
+      dashboard: 'pg-connector',
+    });
+
+    // The region still resolves from metrics, so only the datasource UID is lost.
+    assert.equal(result.region, 'eu-central-1');
+    assert.deepEqual(result.omittedVariables, ['prom_region']);
+    assert.equal(result.warnings.length, 1);
+    assert.match(result.warnings[0] ?? '', /datasources:read/);
+    assert.match(result.warnings[0] ?? '', /Permission denied/);
+  });
+
   it('still returns a link when metric resolution fails outright', async () => {
     mock.method(globalThis, 'fetch', async (url: unknown) => {
       if (String(url).endsWith('/api/datasources')) {

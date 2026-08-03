@@ -154,8 +154,12 @@ Images are built and deployed via GitHub Actions, which dispatch workflows in [t
 
 | Event | Behavior |
 |-------|----------|
-| Push to a feature branch | Build image (`latest` + `auto-<sha>`), deploy to **dev** (`savannah-system`). No Slack notification. |
+| Pull request, or push to `main` | Run Biome, `tsc --noEmit`, and the test suite (`check.yaml`). |
+| Push to a feature branch | Build image tagged `auto-<sha>` only. No deploy, and the `latest` tag is left alone so a branch cannot roll over what `main` published. |
+| Manual **Deploy Feature Branch** run | Deploy that branch's `auto-<sha>` image to **dev** (`savannah-system`). No Slack notification. |
 | Push to `main` | Build image (`latest` + `auto-<sha>`), deploy to **dev**. Prod deploy is wired in the workflow but currently disabled until prod secrets/config are ready. |
+
+This matches the other Tiger MCP servers (`tiger-slab-mcp-server`, `tiger-linear-mcp-server`, and friends): feature branches build automatically and deploy only on request, and every deploy names an immutable commit SHA rather than a moving tag.
 
 Helm chart: `tiger-agents-deploy/charts/tiger-grafana-mcp-server`
 

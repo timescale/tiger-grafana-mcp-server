@@ -47,17 +47,21 @@ export const resolveDashboardContext = async (
 
   let promDatasourceUid: string | null = null;
   if (resolvedRegion) {
+    let listed = true;
     try {
       promDatasourceUid = await prometheusDatasourceUidForRegion(
         ctx.grafana,
         resolvedRegion,
       );
     } catch (error) {
+      listed = false;
       warnings.push(
-        `Could not list Grafana datasources to resolve the ${resolvedRegion} Prometheus UID: ${error instanceof Error ? error.message : String(error)}`,
+        `Could not list Grafana datasources to resolve the ${resolvedRegion} Prometheus UID (the service account token needs datasources:read): ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    if (promDatasourceUid == null) {
+    // Only claim the datasource is absent when the list was actually read;
+    // otherwise a permission error would be reported as a missing datasource.
+    if (listed && promDatasourceUid == null) {
       warnings.push(
         `Grafana has no Prometheus datasource named "Prometheus (${resolvedRegion})"; the link falls back to the dashboard's default datasource, which may show another region's data.`,
       );

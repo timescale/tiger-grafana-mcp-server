@@ -1,0 +1,26 @@
+name: Deploy Feature Branch
+# Manual only. Feature branches are built on every push but deployed to dev
+# deliberately, so one branch cannot roll over another's dev deploy.
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Workflow
+        uses: timescale/workflow-dispatch-action@main
+        with:
+          github-token: ${{ secrets.ORG_AUTOMATION_TOKEN }}
+          owner: timescale
+          repo: tiger-agents-deploy
+          workflow_id: deploy.yaml
+          ref: 'main'
+          inputs: >
+            {
+              "repository": "tiger-grafana-mcp-server",
+              "sha": "${{ github.sha }}",
+              "env": "dev",
+              "namespace": "savannah-system",
+              "notify_slack": false
+            }
