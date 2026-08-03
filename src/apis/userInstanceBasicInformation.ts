@@ -1,19 +1,19 @@
 import type { ApiFactory, InferSchema } from '@tigerdata/mcp-boilerplate';
 import { z } from 'zod';
+import { buildDashboardUrl, DASHBOARDS } from '../dashboards.js';
 import type { ServerContext } from '../types.js';
+import { resolveDashboardContext } from '../util/dashboardContext.js';
+import { POSTGRES_UID, PROMETHEUS_THANOS_UID } from '../util/datasources.js';
 import {
   getValues,
+  promLabelValue,
   queryGrafanaPostgresQueries,
   queryGrafanaPrometheusQueries,
 } from '../util/grafana.js';
 
-// Grafana datasource UIDs. Same UIDs on dev and prod (Grafanas provisioned
-// with deterministic UIDs).
-const PROMETHEUS_THANOS_UID = 'P7C88DFFA3330979B'; // "All Prometheus regions (Thanos)"
-const POSTGRES_UID = 'PDD8BC545CD76D0F3'; // "PostgreSQL (Grafana)" — exposes deployer schema
-
-// Dashboard targeted by the user-facing deep link.
-const USER_INSTANCE_DASHBOARD_PATH = 'd/3lvO6U-Zz/user-instance-single';
+// Dashboard targeted by the user-facing deep link. For other dashboards (the
+// Postgres livesync connector, the pooler, ...) use `grafana_dashboard_link`.
+const DASHBOARD = DASHBOARDS['user-instance'];
 
 const inputSchema = {
   projectId: z.string().describe('The project ID.'),
@@ -34,8 +34,12 @@ const outputSchema = {
   dashboardUrl: z
     .string()
     .describe(
-      'Grafana deep link to the user-instance-single dashboard for this project/service.',
+      'Grafana deep link to the user-instance-single dashboard for this project/service, scoped to the region the service actually runs in.',
     ),
+  region: z
+    .string()
+    .nullable()
+    .describe('Region the service was resolved to, e.g. "eu-central-1".'),
 } as const;
 
 type OutputSchema = InferSchema<typeof outputSchema>;
@@ -64,31 +68,39 @@ export const userInstanceBasicInformation: ApiFactory<
   fn: async ({ projectId, serviceId }): Promise<OutputSchema> => {
     const sqlProjectId = sqlString(projectId);
     const sqlServiceId = sqlString(serviceId);
+    const promProjectId = promLabelValue(projectId);
+    const promServiceId = promLabelValue(serviceId);
 
-    const [postgresVersionResult, timescaledbResult] = await Promise.all([
-      queryGrafanaPrometheusQueries(ctx.grafana, {
-        datasourceUid: PROMETHEUS_THANOS_UID,
-        queries: [
-          {
-            refId: 'major',
-            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[30d])) / 10000`,
-          },
-          {
-            refId: 'minor',
-            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[30d])) % 10000`,
-          },
-        ],
-      }),
-      queryGrafanaPostgresQueries(ctx.grafana, {
-        datasourceUid: POSTGRES_UID,
-        queries: [
-          {
-            refId: 'timescaledb',
-            sql: `SELECT extension_version FROM deployer.instance_extensions WHERE project_id = '${sqlProjectId}' AND service_id = '${sqlServiceId}' AND extension_name = 'timescaledb' AND status = 'Add' ORDER BY created DESC LIMIT 1`,
-          },
-        ],
-      }),
-    ]);
+    const [postgresVersionResult, timescaledbResult, dashboardContext] =
+      await Promise.all([
+        queryGrafanaPrometheusQueries(ctx.grafana, {
+          datasourceUid: PROMETHEUS_THANOS_UID,
+          queries: [
+            {
+              refId: 'major',
+              expr: `max(last_over_time(pg_settings_server_version_num{projectid="${promProjectId}", serviceid="${promServiceId}"}[30d])) / 10000`,
+            },
+            {
+              refId: 'minor',
+              expr: `max(last_over_time(pg_settings_server_version_num{projectid="${promProjectId}", serviceid="${promServiceId}"}[30d])) % 10000`,
+            },
+          ],
+        }),
+        queryGrafanaPostgresQueries(ctx.grafana, {
+          datasourceUid: POSTGRES_UID,
+          queries: [
+            {
+              refId: 'timescaledb',
+              sql: `SELECT extension_version FROM deployer.instance_extensions WHERE project_id = '${sqlProjectId}' AND service_id = '${sqlServiceId}' AND extension_name = 'timescaledb' AND status = 'Add' ORDER BY created DESC LIMIT 1`,
+            },
+          ],
+        }),
+        resolveDashboardContext(ctx, {
+          projectId,
+          serviceId,
+          needsConnector: DASHBOARD.needsConnector,
+        }),
+      ]);
 
     const tsDbVersion =
       getValues(timescaledbResult, 'timescaledb')?.[0]?.[0] ?? null;
@@ -104,15 +116,18 @@ export const userInstanceBasicInformation: ApiFactory<
     const formattedTsDbVersion =
       tsDbVersion == null ? null : String(tsDbVersion);
 
-    const dashboardUrl =
-      `${ctx.grafana.publicUrl}/${USER_INSTANCE_DASHBOARD_PATH}` +
-      `?var-project=${encodeURIComponent(projectId)}` +
-      `&var-service=${encodeURIComponent(serviceId)}`;
+    const { url: dashboardUrl } = buildDashboardUrl(
+      ctx.grafana.publicUrl,
+      DASHBOARD,
+      dashboardContext.context,
+      { from: 'now-24h', to: 'now' },
+    );
 
     return {
       postgresqlVersion: formattedPostgresqlVersion,
       timescaledbVersion: formattedTsDbVersion,
       dashboardUrl,
+      region: dashboardContext.context.region,
     };
   },
 });

@@ -6,6 +6,7 @@ export type GrafanaFrame = {
     fields?: Array<{
       name: string;
       type?: string;
+      labels?: Record<string, string>;
     }>;
   };
   data?: {
@@ -28,17 +29,39 @@ export const getValues = (
 ): unknown[][] | null =>
   response.results?.[refId]?.frames?.[0]?.data?.values ?? null;
 
-export const queryGrafanaDatasource = async <Response = unknown>(
+// Prometheus instant queries carry the series' label set on the value field of
+// the first frame. `max by (...)` in the query decides which labels survive.
+export const getLabels = (
+  response: GrafanaDataFrameResponse,
+  refId: string,
+): Record<string, string> | null => {
+  const fields = response.results?.[refId]?.frames?.[0]?.schema?.fields ?? [];
+  for (const field of fields) {
+    if (field.labels && Object.keys(field.labels).length > 0) {
+      return field.labels;
+    }
+  }
+  return null;
+};
+
+// PromQL label matchers are double-quoted strings: backslashes and quotes have
+// to be escaped or the query is rejected (or, worse, silently reinterpreted).
+export const promLabelValue = (value: string): string =>
+  value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+
+const requestGrafanaJson = async <Response = unknown>(
   config: GrafanaConfig,
-  payload: Record<string, unknown>,
+  path: string,
+  init: RequestInit,
+  what: string,
 ): Promise<Response> => {
-  const response = await fetch(`${config.url}/api/ds/query`, {
-    method: 'POST',
+  const response = await fetch(`${config.url}${path}`, {
+    ...init,
     headers: {
       Authorization: `Bearer ${config.serviceAccountToken}`,
       'Content-Type': 'application/json',
+      ...init.headers,
     },
-    body: JSON.stringify(payload),
   });
 
   const text = await response.text();
@@ -63,11 +86,38 @@ export const queryGrafanaDatasource = async <Response = unknown>(
       typeof body.message === 'string'
         ? body.message
         : text;
-    throw new Error(`Grafana query failed (${response.status}): ${message}`);
+    throw new Error(`Grafana ${what} failed (${response.status}): ${message}`);
   }
 
   return body as Response;
 };
+
+export const queryGrafanaDatasource = async <Response = unknown>(
+  config: GrafanaConfig,
+  payload: Record<string, unknown>,
+): Promise<Response> =>
+  requestGrafanaJson<Response>(
+    config,
+    '/api/ds/query',
+    { method: 'POST', body: JSON.stringify(payload) },
+    'query',
+  );
+
+export type GrafanaDatasource = {
+  uid: string;
+  name: string;
+  type: string;
+};
+
+export const listGrafanaDatasources = async (
+  config: GrafanaConfig,
+): Promise<GrafanaDatasource[]> =>
+  requestGrafanaJson<GrafanaDatasource[]>(
+    config,
+    '/api/datasources',
+    { method: 'GET' },
+    'datasource listing',
+  );
 
 export const queryGrafanaPostgresQueries = async (
   config: GrafanaConfig,

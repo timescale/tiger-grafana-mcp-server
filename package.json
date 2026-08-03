@@ -19,7 +19,7 @@
     "prepublishOnly": "npm run build",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "lint": "biome check .",
     "inspector": "mcp-inspector",
     "dev:inspector": "./scripts/dev-inspector.sh"

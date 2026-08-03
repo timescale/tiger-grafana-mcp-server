@@ -8,13 +8,39 @@ Built on [`@tigerdata/mcp-boilerplate`](https://www.npmjs.com/package/@tigerdata
 
 | Tool | Description |
 |------|-------------|
-| `user_instance_basic_information` | Returns PostgreSQL and TimescaleDB versions for a given `projectId` and `serviceId`, plus a deep link (`dashboardUrl`) to the **user-instance-single** Grafana dashboard. |
+| `user_instance_basic_information` | Returns PostgreSQL and TimescaleDB versions for a given `projectId` and `serviceId`, plus a region-scoped deep link (`dashboardUrl`) to the **user-instance-single** Grafana dashboard. |
+| `grafana_dashboard_link` | Returns a region-scoped deep link to any dashboard in the registry below for a given `projectId` and `serviceId`, with every template variable resolved from live metrics. |
+
+### `grafana_dashboard_link`
+
+Pick a dashboard with the `dashboard` parameter:
+
+| `dashboard` | Grafana dashboard | Use it for |
+|-------------|-------------------|------------|
+| `user-instance` | `user-instance-single` | Generic per-service Postgres view: CPU, memory, disk, connections, query stats. |
+| `pg-connector` | `postgres-livesync-single-user` | Per-service Postgres source connector: replication lag, apply/flush LSN, sync state. **The dashboard for `PgConnector*` alerts.** |
+| `pooler` | `connection-pooler` | Client/server connections, pool saturation, wait times. |
+| `tigerlake` | `tigerlake-performance` | Tigerlake (Iceberg destination) throughput and latency. |
+| `connector-k8s-events` | `connector-k8s-events` | Kubernetes events for connector workloads: restarts, evictions, scheduling failures. |
+
+Optional parameters: `region` (skips region resolution, for services that have stopped reporting metrics), `from` and `to` (default `now-2d` → `now`).
+
+Rather than assuming values, the tool resolves them from the service's own metrics via Thanos and from Grafana's datasource list:
+
+- **region**: from the `region` label on the service's metrics.
+- **Prometheus datasource UID**: by looking up `Prometheus (<region>)` in `/api/datasources`. Per-region UIDs are not hardcoded, so new regions work without a code change.
+- **pod**: the primary Postgres member (`<service>-an-<ordinal>`), reconstructed from the `node_name` and `ordinal` labels. Note this is the *database* pod, which is what the livesync dashboard's `pod` variable scopes its panels to, not the connector pod.
+- **app_name**: the connector's `container` label, e.g. `pgsrc-connector`.
+
+Anything that cannot be resolved is left out of the link so the dashboard applies its own default, and is reported in `omittedVariables` and `warnings` instead of being guessed.
+
+> **`region` means different things on different dashboards.** On `user-instance` and `pooler`, the human region lives in `plain_region` while `region`/`datasource` holds a Grafana datasource UID. On `pg-connector` it is inverted: `region` is the human region and the UID lives in `prom_region`. Filling the wrong one produces a link that loads but renders another region's data. The per-dashboard mapping lives in [`src/dashboards.ts`](src/dashboards.ts).
 
 ## Requirements
 
 - Node.js 22+
 - A Grafana URL reachable from where the server runs
-- A Grafana **service account token** with permission to query datasources
+- A Grafana **service account token** with permission to query datasources *and* to list them (`datasources:read` on `datasources:*`), which `grafana_dashboard_link` needs to resolve per-region Prometheus UIDs
 
 ## Configuration
 
@@ -22,7 +48,7 @@ Built on [`@tigerdata/mcp-boilerplate`](https://www.npmjs.com/package/@tigerdata
 |----------|----------|-------------|
 | `GRAFANA_URL` | yes | Grafana API base URL (no trailing slash). In-cluster: `http://monitoring-v2-grafana.savannah-system.svc.cluster.local` |
 | `GRAFANA_SERVICE_ACCOUNT_TOKEN` | yes | Grafana service account token (Bearer auth) |
-| `PROD_DEPLOY` | no | When `true`, deep links target the prod Grafana host. Anything else (or unset) targets dev. Used only for user-facing URLs, not for API queries. |
+| `PROD_DEPLOY` | no | When `true`, deep links target the prod Grafana host and the prod log hosts (`log.prod-<region>.ops.forge.timescale.com`). Anything else (or unset) targets dev. Used only for user-facing URLs, not for API queries. |
 
 Create a `.env` file in the project root:
 
@@ -35,7 +61,7 @@ GRAFANA_SERVICE_ACCOUNT_TOKEN=your-token-here
 
 1. Open Grafana (dev: `https://grafana.dev-us-east-1.ops.dev.timescale.com` or your environment URL).
 2. **Administration** → **Service accounts** → create or select an account.
-3. Add a token with access to the Postgres and Prometheus datasources used by the tool.
+3. Add a token with access to the Postgres and Prometheus datasources used by the tools, plus permission to list datasources (`datasources:read`).
 4. Put the token in `GRAFANA_SERVICE_ACCOUNT_TOKEN`.
 
 For Kubernetes deploys, the token is stored as a sealed secret in [`tiger-agents-deploy`](../tiger-agents-deploy) under `charts/tiger-grafana-mcp-server/values/dev.yaml`.

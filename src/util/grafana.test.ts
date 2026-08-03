@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 import type { GrafanaConfig } from '../types.js';
 import {
+  getLabels,
   getValues,
+  listGrafanaDatasources,
+  promLabelValue,
   queryGrafanaDatasource,
   queryGrafanaPostgresQueries,
   queryGrafanaPrometheusQueries,
@@ -11,6 +14,7 @@ import {
 const config: GrafanaConfig = {
   url: 'https://grafana.example.com',
   publicUrl: 'https://grafana.example.com',
+  logHostTemplate: 'log.prod-{region}.ops.forge.timescale.com',
   serviceAccountToken: 'token',
 };
 
@@ -78,6 +82,109 @@ describe('getValues', () => {
 
   it('returns null when the refId is missing', () => {
     assert.equal(getValues({ results: {} }, 'missing'), null);
+  });
+});
+
+describe('getLabels', () => {
+  it('reads the label set off the first field that carries labels', () => {
+    const response = {
+      results: {
+        instance: {
+          frames: [
+            {
+              schema: {
+                refId: 'instance',
+                fields: [
+                  { name: 'Time', type: 'time' },
+                  {
+                    name: 'Value',
+                    type: 'number',
+                    labels: { region: 'eu-central-1', ordinal: '0' },
+                  },
+                ],
+              },
+              data: { values: [[1779351105410], [180004]] },
+            },
+          ],
+        },
+      },
+    };
+
+    assert.deepEqual(getLabels(response, 'instance'), {
+      region: 'eu-central-1',
+      ordinal: '0',
+    });
+  });
+
+  it('returns null when no field carries labels', () => {
+    const response = {
+      results: {
+        instance: {
+          frames: [
+            {
+              schema: { refId: 'instance', fields: [{ name: 'Time' }] },
+              data: { values: [[1]] },
+            },
+          ],
+        },
+      },
+    };
+
+    assert.equal(getLabels(response, 'instance'), null);
+    assert.equal(getLabels({ results: {} }, 'instance'), null);
+  });
+});
+
+describe('promLabelValue', () => {
+  it('escapes backslashes and double quotes', () => {
+    assert.equal(promLabelValue('plain'), 'plain');
+    assert.equal(promLabelValue('a"b'), 'a\\"b');
+    assert.equal(promLabelValue('a\\b'), 'a\\\\b');
+    // Escaping order matters: a quote must not end up singly-escaped by a
+    // later backslash pass.
+    assert.equal(promLabelValue('a\\"b'), 'a\\\\\\"b');
+  });
+});
+
+describe('listGrafanaDatasources', () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it('GETs the datasource list', async () => {
+    const datasources = [
+      {
+        uid: 'P06D2DA4239B6BF57',
+        name: 'Prometheus (eu-central-1)',
+        type: 'prometheus',
+      },
+    ];
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      jsonResponse(datasources),
+    );
+
+    assert.deepEqual(await listGrafanaDatasources(config), datasources);
+
+    const call = fetchMock.mock.calls[0];
+    assert.ok(call);
+    const [url, init] = call.arguments as [string, RequestInit];
+    assert.equal(url, 'https://grafana.example.com/api/datasources');
+    assert.equal(init.method, 'GET');
+    assert.equal(
+      (init.headers as Record<string, string>).Authorization,
+      'Bearer token',
+    );
+  });
+
+  it('reports the failing operation in the error message', async () => {
+    mock.method(globalThis, 'fetch', async () =>
+      jsonResponse({ message: 'Permission denied' }, 403),
+    );
+
+    await assert.rejects(
+      listGrafanaDatasources(config),
+      /Grafana datasource listing failed \(403\): Permission denied/,
+    );
   });
 });
 
