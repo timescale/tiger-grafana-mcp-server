@@ -15,9 +15,21 @@ const POSTGRES_UID = 'PDD8BC545CD76D0F3'; // "PostgreSQL (Grafana)" — exposes 
 // Dashboard targeted by the user-facing deep link.
 const USER_INSTANCE_DASHBOARD_PATH = 'd/3lvO6U-Zz/user-instance-single';
 
+// Project and service IDs are generated from lowercase letters and digits
+// only. Rejecting anything else keeps a caller from changing the PromQL and
+// SQL queries that these IDs are placed into.
+const ID_PATTERN = /^[a-z0-9]+$/;
+const ID_PATTERN_MESSAGE = 'Must contain only lowercase letters and digits.';
+
 const inputSchema = {
-  projectId: z.string().describe('The project ID.'),
-  serviceId: z.string().describe('The service ID.'),
+  projectId: z
+    .string()
+    .regex(ID_PATTERN, ID_PATTERN_MESSAGE)
+    .describe('The project ID.'),
+  serviceId: z
+    .string()
+    .regex(ID_PATTERN, ID_PATTERN_MESSAGE)
+    .describe('The service ID.'),
 } as const;
 
 const outputSchema = {
@@ -42,6 +54,11 @@ type OutputSchema = InferSchema<typeof outputSchema>;
 
 const sqlString = (value: string): string => value.replaceAll("'", "''");
 
+// Escape a value for use inside a double-quoted PromQL label matcher so it
+// cannot close the matcher and add selectors or expressions of its own.
+const promString = (value: string): string =>
+  value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '\\n');
+
 export const userInstanceBasicInformation: ApiFactory<
   ServerContext,
   typeof inputSchema,
@@ -64,6 +81,8 @@ export const userInstanceBasicInformation: ApiFactory<
   fn: async ({ projectId, serviceId }): Promise<OutputSchema> => {
     const sqlProjectId = sqlString(projectId);
     const sqlServiceId = sqlString(serviceId);
+    const promProjectId = promString(projectId);
+    const promServiceId = promString(serviceId);
 
     const [postgresVersionResult, timescaledbResult] = await Promise.all([
       queryGrafanaPrometheusQueries(ctx.grafana, {
@@ -71,11 +90,11 @@ export const userInstanceBasicInformation: ApiFactory<
         queries: [
           {
             refId: 'major',
-            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[30d])) / 10000`,
+            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${promProjectId}", serviceid="${promServiceId}"}[30d])) / 10000`,
           },
           {
             refId: 'minor',
-            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${projectId}", serviceid="${serviceId}"}[30d])) % 10000`,
+            expr: `max(last_over_time(pg_settings_server_version_num{projectid="${promProjectId}", serviceid="${promServiceId}"}[30d])) % 10000`,
           },
         ],
       }),
