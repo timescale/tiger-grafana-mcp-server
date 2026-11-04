@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
+import { z } from 'zod';
 import type { ServerContext } from '../types.js';
 import { userInstanceBasicInformation } from './userInstanceBasicInformation.js';
 
@@ -118,5 +119,61 @@ describe('userInstanceBasicInformation', () => {
     const payload = JSON.parse(String(init.body));
     assert.match(payload.queries[0].rawSql, /project_id = 'project''id'/);
     assert.match(payload.queries[0].rawSql, /service_id = 'service''id'/);
+  });
+
+  it('escapes project and service IDs in the Prometheus queries', async () => {
+    const fetchMock = mock.method(globalThis, 'fetch', async () =>
+      jsonResponse(grafanaResponse('major', [[1779351105410], [18.0003]])),
+    );
+
+    const tool = await userInstanceBasicInformation(context, {});
+    await tool.fn({
+      projectId: 'x"} or up{a="',
+      serviceId: 'y\\"}\nor up{',
+    });
+
+    const call = fetchMock.mock.calls[0];
+    assert.ok(call);
+    const [, init] = call.arguments as [string, RequestInit];
+    const payload = JSON.parse(String(init.body));
+    for (const query of payload.queries) {
+      assert.equal(
+        query.expr.split('pg_settings_server_version_num{').length,
+        2,
+      );
+      assert.match(
+        query.expr,
+        /projectid="x\\"} or up{a=\\"", serviceid="y\\\\\\"}\\nor up{"/,
+      );
+    }
+  });
+
+  it('only accepts lowercase alphanumeric project and service IDs', async () => {
+    const tool = await userInstanceBasicInformation(context, {});
+    const Input = z.object(tool.config.inputSchema);
+
+    assert.ok(
+      Input.safeParse({ projectId: 'a90edkib9o', serviceId: 'forkh6059q' })
+        .success,
+    );
+    for (const bad of [
+      '',
+      'A90EDKIB9O',
+      'a90edkib9o"}',
+      'a90edkib9o", region="eu-central-1',
+      'a90edkib9o\n',
+      'a-b',
+    ]) {
+      assert.equal(
+        Input.safeParse({ projectId: bad, serviceId: 'forkh6059q' }).success,
+        false,
+        `projectId ${JSON.stringify(bad)} must be rejected`,
+      );
+      assert.equal(
+        Input.safeParse({ projectId: 'a90edkib9o', serviceId: bad }).success,
+        false,
+        `serviceId ${JSON.stringify(bad)} must be rejected`,
+      );
+    }
   });
 });
